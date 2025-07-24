@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1.0">
+  <title>時光音樂遊戲合集</title>
+  <style>
+    body {
+      margin: 0; padding: 0; background: #222; color: #eee; font-family: 'Noto Sans TC', Arial, sans-serif;
+      min-height: 100vh; display: flex; flex-direction: column; align-items: center;
+    }
+    h1 {margin-top: 24px;}
+    .menu {
+      display: flex; gap: 18px; margin: 24px auto 12px auto; justify-content: center;
+    }
+    .menu button {
+      padding: 10px 20px; background: #444; color: #fff; border: none; border-radius: 8px;
+      font-size: 1.1em; cursor: pointer; transition: background 0.2s;
+    }
+    .menu button.active, .menu button:hover {background: #fdba4b; color: #222;}
+    .game-view {width: 100vw; max-width: 480px; margin: auto; min-height: 480px; background: rgba(80,80,80,0.07); border-radius: 14px; box-shadow: 0 6px 24px #0003; position: relative; overflow: hidden;}
+    .hidden {display: none;}
+    /* 共用提示 */
+    .tip {position: absolute; left: 0; width: 100%; text-align: center; top: 12px; font-size: 1.05em; color: #fdba4b;}
+    /* --------- 時光唱盤 ----------- */
+    #record-view {display: flex; flex-direction: column; align-items: center; justify-content: center; height: 420px;}
+    .record-wrap {position: relative; width: 300px; height: 300px;}
+    #vinyl-canvas {width: 100%; height: 100%; background: #222; border-radius: 50%; box-shadow: 0 0 24px #000a;}
+    .arm {position: absolute; width: 140px; height: 20px; left: 48px; top: 110px; pointer-events: none; z-index: 10;}
+    .needle {position: absolute; width: 25px; height: 25px; left: 160px; top: 137px; pointer-events: all; z-index: 11; cursor: pointer; transition: filter 0.1s;}
+    .needle.active {filter: drop-shadow(0 0 8px #fdba4b);}
+    /* --------- 指揮家 ----------- */
+    #conductor-view {position: relative; height: 420px; background: #243;}
+    .conductor-bg {position: absolute; left: 0; top: 0; width: 100%; height: 100%; z-index: 1;}
+    .track-path {stroke: #fffacd; stroke-width: 8; fill: none; filter: drop-shadow(0 0 10px #ffe);}
+    .user-path {stroke: #ffba00; stroke-width: 10; fill: none; filter: drop-shadow(0 0 12px #fdba4b);}
+    .baton {position: absolute; width: 44px; height: 44px; left: -22px; top: -22px; pointer-events: none;}
+    /* --------- 時光節拍 ----------- */
+    #rhythm-view {display: flex; flex-direction: column; align-items: center; height: 420px;}
+    .drum-bg {width: 100%; height: 100%; background: linear-gradient(180deg, #233 70%, #333 100%); position: absolute; z-index: 0;}
+    .beat-btn {width: 80px; height: 80px; border-radius: 50%; background: radial-gradient(circle at 30% 30%, #ffe 70%, #fdba4b 100%); border: 3px solid #fdba4b; margin: 48px 20px 0 20px; font-size: 2em; color: #222; box-shadow: 0 6px 16px #0005; cursor: pointer;}
+    .beat-btn.active {background: #fff4c1; box-shadow: 0 0 24px #fdba4b;}
+    .scoreboard {margin: 18px auto 0 auto; font-size: 1.2em;}
+    .poster {width: 100%; max-width: 320px; margin: 18px auto 0 auto; border-radius: 12px; box-shadow: 0 0 12px #000b; filter: blur(12px); transition: filter 1.2s;}
+    .poster.clear {filter: blur(0);}
+    .badge {margin: 16px auto; background: #fdba4b; color: #222; padding: 8px 24px; border-radius: 18px; font-weight: bold;}
+  </style>
+</head>
+<body>
+  <h1>時光音樂遊戲合集</h1>
+  <div class="menu">
+    <button id="btn-record" class="active">時光唱盤</button>
+    <button id="btn-conductor">指揮家</button>
+    <button id="btn-rhythm">時光節拍</button>
+  </div>
+  <div class="game-view">
+    <!-- ===== 時光唱盤 ===== -->
+    <div id="record-view">
+      <div class="tip">拖動唱臂對準發光音符，落下唱針！</div>
+      <div class="record-wrap">
+        <canvas id="vinyl-canvas" width="300" height="300"></canvas>
+        <img class="arm" src="https://raw.githubusercontent.com/jimmynishida/mock-assets/main/vinyl_arm.png" style="pointer-events:none;">
+        <img id="needle" class="needle" src="https://raw.githubusercontent.com/jimmynishida/mock-assets/main/needle.png" alt="唱針">
+      </div>
+      <div style="width:100%; text-align:center; margin-top: 10px;">
+        <button id="record-retry" style="display:none;">再玩一次</button>
+      </div>
+    </div>
+    <!-- ===== 指揮家 ===== -->
+    <div id="conductor-view" class="hidden">
+      <div class="tip">跟隨光流軌跡，用手指劃動指揮！</div>
+      <svg id="conductor-svg" class="conductor-bg" width="320" height="420"></svg>
+      <img id="baton" class="baton" src="https://raw.githubusercontent.com/jimmynishida/mock-assets/main/baton.png">
+      <div style="width:100%; text-align:center; margin-top: 10px;">
+        <button id="conductor-retry" style="display:none;">再玩一次</button>
+      </div>
+    </div>
+    <!-- ===== 時光節拍 ===== -->
+    <div id="rhythm-view" class="hidden">
+      <div class="tip">跟著節奏點擊鼓面，完成關卡！</div>
+      <div class="drum-bg"></div>
+      <div style="display:flex; justify-content:center;">
+        <button class="beat-btn" id="drum1">●</button>
+        <button class="beat-btn" id="drum2" style="display:none;">●</button>
+        <button class="beat-btn" id="drum3" style="display:none;">●</button>
+      </div>
+      <div class="scoreboard" id="scoreboard"></div>
+      <img class="poster" id="poster-img" src="https://raw.githubusercontent.com/jimmynishida/mock-assets/main/poster_blur.jpg">
+      <div class="badge" id="rhythm-badge" style="display:none;">勳章：青春節拍手！</div>
+      <div style="width:100%; text-align:center; margin-top: 10px;">
+        <button id="rhythm-retry" style="display:none;">再玩一次</button>
+      </div>
+    </div>
+  </div>
+  <audio id="audio" src="" preload="auto"></audio>
+  <script>
+    // ==== 共用 ====
+    const btnRecord = document.getElementById('btn-record');
+    const btnConductor = document.getElementById('btn-conductor');
+    const btnRhythm = document.getElementById('btn-rhythm');
+    const views = {
+      record: document.getElementById('record-view'),
+      conductor: document.getElementById('conductor-view'),
+      rhythm: document.getElementById('rhythm-view'),
+    };
+    function switchView(view) {
+      for(let k in views) views[k].classList.add('hidden');
+      views[view].classList.remove('hidden');
+      [btnRecord, btnConductor, btnRhythm].forEach(b=>b.classList.remove('active'));
+      if(view==='record') btnRecord.classList.add('active');
+      if(view==='conductor') btnConductor.classList.add('active');
+      if(view==='rhythm') btnRhythm.classList.add('active');
+    }
+    btnRecord.onclick = ()=>switchView('record');
+    btnConductor.onclick = ()=>switchView('conductor');
+    btnRhythm.onclick = ()=>switchView('rhythm');
+    // =========================時光唱盤=========================
+    const vinylCanvas = document.getElementById('vinyl-canvas');
+    const ctx = vinylCanvas.getContext('2d');
+    const needle = document.getElementById('needle');
+    let recordAngle = 0, recordInterval, noteAngle = Math.random()*360, noteHit = false, dragging = false;
+    let armAngle = 45; // 角度, 0=右側, 90=正下
+    function drawVinyl() {
+      ctx.clearRect(0,0,300,300);
+      // 黑膠圓形
+      ctx.save();
+      ctx.translate(150,150);
+      ctx.rotate(recordAngle*Math.PI/180);
+      ctx.beginPath(); ctx.arc(0,0,140,0,2*Math.PI); ctx.fillStyle='#222'; ctx.fill();
+      // Grooves
+      for(let r=60;r<140;r+=7){
+        ctx.beginPath(); ctx.arc(0,0,r,0,2*Math.PI);
+        ctx.strokeStyle=`rgba(200,200,200,${0.07+0.14*(r%2)})`;
+        ctx.lineWidth=2;
+        ctx.stroke();
+      }
+      // 唱片中心
+      ctx.beginPath(); ctx.arc(0,0,24,0,2*Math.PI); ctx.fillStyle='#d4b97b'; ctx.fill();
+      // 專輯封面
+      ctx.beginPath(); ctx.arc(0,0,20,0,2*Math.PI); ctx.save();
+      ctx.clip(); ctx.drawImage(awaitOrFallback('https://raw.githubusercontent.com/jimmynishida/mock-assets/main/album.jpg'),-20,-20,40,40); ctx.restore();
+      // 發光音符
+      let notePos = polarToXY(100, noteAngle);
+      ctx.beginPath(); ctx.arc(notePos.x, notePos.y, 16,0,2*Math.PI);
+      ctx.shadowColor = "#fdba4b"; ctx.shadowBlur = 24; ctx.fillStyle="#fdba4b"; ctx.fill();
+      ctx.shadowBlur = 0;
+      // 音符圖示
+      ctx.drawImage(awaitOrFallback('https://raw.githubusercontent.com/jimmynishida/mock-assets/main/note.png'), notePos.x-12, notePos.y-12, 24,24);
+      // 發光軌道
+      ctx.beginPath(); ctx.arc(0,0,100,(noteAngle-10)*Math.PI/180,(noteAngle+10)*Math.PI/180);
+      ctx.strokeStyle="#fdba4b88"; ctx.lineWidth=12; ctx.stroke();
+      ctx.restore();
+      // 粒子特效(判定)
+      if(noteHit){
+        for(let i=0;i<32;i++){
+          let a = Math.random()*2*Math.PI, r = 100+Math.random()*32;
+          let x = 150+Math.cos(a)*r, y = 150+Math.sin(a)*r;
+          ctx.beginPath(); ctx.arc(x,y,2+Math.random()*3,0,2*Math.PI);
+          ctx.fillStyle=`rgba(253,186,75,${Math.random()*0.8})`;
+          ctx.fill();
+        }
+      }
+    }
+    function polarToXY(r,angle){
+      return {x:Math.cos(angle*Math.PI/180)*r, y:Math.sin(angle*Math.PI/180)*r};
+    }
+    // 載入圖片緩存
+    const imgCache = {};
+    function awaitOrFallback(url){
+      if(imgCache[url]) return imgCache[url];
+      let img = new Image(); img.src = url; imgCache[url]=img; return img;
+    }
+    function startRecordGame(){
+      recordAngle = 0; noteAngle = Math.random()*360; noteHit = false; armAngle = 45;
+      drawVinyl();
+      needle.style.left = (150+Math.cos(armAngle*Math.PI/180)*110-12)+"px";
+      needle.style.top = (150+Math.sin(armAngle*Math.PI/180)*110-12)+"px";
+      needle.classList.remove('active');
+      document.querySelector('.arm').style.transform = `rotate(${armAngle-45}deg)`;
+      document.getElementById('record-retry').style.display='none';
+      recordInterval = setInterval(()=>{
+        recordAngle = (recordAngle+1.1)%360;
+        drawVinyl();
+      },16);
+    }
+    // 唱針拖動
+    needle.ontouchstart = needle.onmousedown = function(e){
+      dragging = true; needle.classList.add('active');
+      document.body.style.userSelect="none";
+    }
+    document.onmousemove = document.ontouchmove = function(e){
+      if(!dragging) return;
+      let x,y;
+      if(e.touches){
+        x = e.touches[0].clientX-vinylCanvas.getBoundingClientRect().left-150;
+        y = e.touches[0].clientY-vinylCanvas.getBoundingClientRect().top-150;
+      }else{
+        x = e.clientX-vinylCanvas.getBoundingClientRect().left-150;
+        y = e.clientY-vinylCanvas.getBoundingClientRect().top-150;
+      }
+      armAngle = Math.atan2(y,x)*180/Math.PI;
+      if(armAngle<0) armAngle+=360;
+      if(armAngle>120) armAngle=120; if(armAngle<30) armAngle=30;
+      needle.style.left = (150+Math.cos(armAngle*Math.PI/180)*110-12)+"px";
+      needle.style.top = (150+Math.sin(armAngle*Math.PI/180)*110-12)+"px";
+      document.querySelector('.arm').style.transform = `rotate(${armAngle-45}deg)`;
+    }
+    document.onmouseup = document.ontouchend = function(e){
+      if(!dragging) return;
+      dragging = false; needle.classList.remove('active'); document.body.style.userSelect="";
+      // 判定
+      let diff = Math.abs(armAngle-noteAngle);
+      if(diff>180) diff = 360-diff;
+      if(diff<8){
+        noteHit = true; drawVinyl(); clearInterval(recordInterval);
+        setTimeout(()=>{document.getElementById('record-retry').style.display='block';},1200);
+      }
+    }
+    document.getElementById('record-retry').onclick = startRecordGame;
+    startRecordGame();
+    // =========================指揮家=========================
+    const svg = document.getElementById('conductor-svg');
+    const baton = document.getElementById('baton');
+    let track = [], userPath = [], pathDrawing = false, pathScore = 0;
+    function genTrack(){
+      track = [];
+      let cx=160, cy=210, a=0;
+      for(let i=0;i<22;i++){
+        let r=110+Math.sin(i*0.3)*40, angle=a;
+        track.push([cx+Math.cos(angle)*r, cy+Math.sin(angle)*r]);
+        a+=Math.PI*2/24;
+      }
+    }
+    function drawTrack(){
+      svg.innerHTML = '';
+      let pathD = 'M'+track[0][0]+','+track[0][1];
+      for(let i=1;i<track.length;i++) pathD += ' L'+track[i][0]+','+track[i][1];
+      let path = document.createElementNS("http://www.w3.org/2000/svg","path");
+      path.setAttribute('d',pathD);
+      path.setAttribute('class',"track-path");
+      svg.appendChild(path);
+      let userD = '';
+      for(let i=0;i<userPath.length;i++){
+        if(i==0) userD += 'M'+userPath[i][0]+','+userPath[i][1];
+        else userD += ' L'+userPath[i][0]+','+userPath[i][1];
+      }
+      let userPathElem = document.createElementNS("http://www.w3.org/2000/svg","path");
+      userPathElem.setAttribute('d',userD);
+      userPathElem.setAttribute('class',"user-path");
+      svg.appendChild(userPathElem);
+    }
+    function startConductorGame(){
+      genTrack(); userPath = []; pathDrawing = false; pathScore=0;
+      drawTrack(); baton.style.display='none';
+      document.getElementById('conductor-retry').style.display='none';
+    }
+    svg.ontouchstart = svg.onmousedown = function(e){
+      pathDrawing = true; userPath=[]; drawTrack(); baton.style.display='';
+    }
+    svg.ontouchmove = svg.onmousemove = function(e){
+      if(!pathDrawing) return;
+      let x,y;
+      if(e.touches){
+        x = e.touches[0].clientX-svg.getBoundingClientRect().left;
+        y = e.touches[0].clientY-svg.getBoundingClientRect().top;
+      }else{
+        x = e.clientX-svg.getBoundingClientRect().left;
+        y = e.clientY-svg.getBoundingClientRect().top;
+      }
+      userPath.push([x,y]);
+      drawTrack();
+      baton.style.left=(x-22)+'px'; baton.style.top=(y-22)+'px';
+    }
+    svg.ontouchend = svg.onmouseup = function(e){
+      pathDrawing = false; baton.style.display='none';
+      // 評分
+      if(userPath.length<track.length) return;
+      let score = 0;
+      for(let i=0;i<track.length;i++){
+        let t = track[i], u = userPath[Math.floor(i*userPath.length/track.length)];
+        let d = Math.hypot(t[0]-u[0], t[1]-u[1]);
+        if(d<30) score++;
+      }
+      pathScore = score/track.length;
+      if(pathScore>0.7){
+        // 特效
+        for(let i=0;i<18;i++){
+          let star = document.createElement('div');
+          star.style=`position:absolute;left:${80+Math.random()*160}px;top:${180+Math.random()*60}px;width:${12+Math.random()*10}px;height:3px;background:#ffe;transform:rotate(${Math.random()*360}deg);border-radius:2px;opacity:0.7;z-index:20;pointer-events:none;`;
+          svg.parentNode.appendChild(star);
+          setTimeout(()=>star.remove(), Math.random()*900+300);
+        }
+      }
+      setTimeout(()=>{document.getElementById('conductor-retry').style.display='block';},1100);
+    }
+    document.getElementById('conductor-retry').onclick = startConductorGame;
+    startConductorGame();
+    // =========================時光節拍=========================
+    const drum1 = document.getElementById('drum1');
+    const drum2 = document.getElementById('drum2');
+    const drum3 = document.getElementById('drum3');
+    const poster = document.getElementById('poster-img');
+    const badge = document.getElementById('rhythm-badge');
+    const scoreboard = document.getElementById('scoreboard');
+    let beatSeq = [], beatNow=0, beatScore=0, beatMode=1, beatTimer=0, beatState='init';
+    function startRhythmGame(){
+      poster.classList.remove('clear'); badge.style.display='none'; scoreboard.innerHTML='';
+      beatMode = Math.random()<0.5?1:2;
+      beatSeq = (beatMode===1)
+        ? [1,1,1,1,1,1,1,1]
+        : [1,2,3,1,2,3,2,1,3,2,1,1,3,2];
+      // 按難度顯示按鈕
+      drum2.style.display = beatMode===1?'none':'inline-block';
+      drum3.style.display = beatMode===1?'none':'inline-block';
+      beatNow=0; beatScore=0; beatState='playing';
+      document.getElementById('rhythm-retry').style.display='none';
+      nextBeat();
+    }
+    function nextBeat(){
+      if(beatNow>=beatSeq.length){
+        beatState='end';
+        poster.classList.add('clear');
+        badge.style.display='block';
+        scoreboard.innerHTML = `完成節拍率 ${(beatScore/beatSeq.length*100).toFixed(0)}%`;
+        document.getElementById('rhythm-retry').style.display='block';
+        return;
+      }
+      let btns = [drum1, drum2, drum3];
+      btns.forEach(b=>b.classList.remove('active'));
+      let idx = beatSeq[beatNow]-1;
+      btns[idx].classList.add('active');
+      beatTimer = setTimeout(()=>{
+        btns[idx].classList.remove('active');
+        beatNow++; nextBeat();
+      }, 1100-(beatMode===1?0:450));
+    }
+    function hitDrum(i){
+      if(beatState!=='playing') return;
+      let idx = beatSeq[beatNow]-1;
+      if(i===idx){
+        beatScore++;
+        // 音效可補上
+      }
+    }
+    [drum1,drum2,drum3].forEach((btn,i)=>btn.onclick = ()=>hitDrum(i));
+    [drum1,drum2,drum3].forEach((btn,i)=>btn.ontouchstart = ()=>hitDrum(i));
+    document.getElementById('rhythm-retry').onclick = startRhythmGame;
+    startRhythmGame();
+  </script>
+</body>
+</html>
